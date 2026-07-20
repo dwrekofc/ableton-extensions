@@ -1,0 +1,7 @@
+{
+  "name": "Ableton Command Palette",
+  "author": "Personal Project",
+  "version": "0.1.0",
+  "entry": "dist/extension.js",
+  "minimumApiVersion": "1.0.0"
+}

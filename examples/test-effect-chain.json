@@ -1,0 +1,21 @@
+{
+  "id": "test-effect-chain",
+  "name": "Test Effect Chain",
+  "description": "Renames the selected track and adds two stock effects for smoke testing.",
+  "actions": [
+    {
+      "type": "rename_track",
+      "name": "Palette Test"
+    },
+    {
+      "type": "insert_native",
+      "name": "EQ Eight",
+      "position": "end"
+    },
+    {
+      "type": "insert_native",
+      "name": "Utility",
+      "position": "end"
+    }
+  ]
+}
