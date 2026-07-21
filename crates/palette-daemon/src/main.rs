@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use palette_core::{AppPaths, RuntimeConfig, Store};
+use palette_core::{
+    AppPaths, RuntimeConfig, Store, default_live_plugin_database, import_live_plugin_database,
+};
 use palette_protocol::{
     MAX_FRAME_BYTES, PROTOCOL_VERSION, PeerRole, PeerTarget, ProtocolError, RequestKind,
     ResponseData, ServiceStatus, WireMessage,
@@ -217,7 +219,23 @@ async fn route_client_request(
     {
         if browser_path.is_empty() {
             match state.store.lock().await.get_item(item_id) {
-                Ok(Some(item)) => *browser_path = item.browser_path,
+                Ok(Some(item)) => {
+                    if item.source == palette_protocol::ItemSource::LiveDatabase
+                        && item.browser_path.is_empty()
+                    {
+                        let _ = client
+                            .send(WireMessage::failure(
+                                request_id,
+                                ProtocolError::new(
+                                    "browser_path_unresolved",
+                                    "plug-in was discovered in Ableton's index but still needs Browser-path resolution before loading",
+                                ),
+                            ))
+                            .await;
+                        return;
+                    }
+                    *browser_path = item.browser_path;
+                }
                 Ok(None) => {
                     let _ = client
                         .send(WireMessage::failure(
@@ -421,6 +439,15 @@ async fn handle_daemon_request(
             RequestKind::Search { query, limit } => Ok(ResponseData::SearchResults(
                 state.store.lock().await.search(&query, limit)?,
             )),
+            RequestKind::ImportLiveDatabase { plugin_database } => {
+                let path = plugin_database
+                    .map(PathBuf::from)
+                    .map(Ok)
+                    .unwrap_or_else(default_live_plugin_database)?;
+                let (items, summary) = import_live_plugin_database(&path)?;
+                state.store.lock().await.upsert_catalog(&items)?;
+                Ok(ResponseData::LiveDatabaseImport(summary))
+            }
             RequestKind::SetFavorite { item_id, favorite } => {
                 state.store.lock().await.set_favorite(&item_id, favorite)?;
                 Ok(ResponseData::Ack)

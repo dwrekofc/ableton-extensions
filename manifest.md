@@ -37,6 +37,7 @@ The Rust and Python product path has passed real in-Live context, 5,000-item cat
 - User Library installation and authenticated Live connection. **Passed**
 - Selected-track/device context and diagnostics. **Passed**
 - Real catalog traversal and native/Browser loading. **Passed at 5,000 items**
+- Read-only Ableton plug-in index import and search. **Passed: 60 plug-ins, 28 vendors**
 - All placement modes, workflows, and personalization. **Passed**
 - Corrected transport at 10,000–20,000 items. **Pending Live restart**
 - Installation, logs, recovery, and rollback documentation. **Passed**

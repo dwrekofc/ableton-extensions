@@ -353,6 +353,7 @@ impl Store {
             pinned: false,
             usage_count: 0,
             last_used_at: None,
+            metadata: serde_json::Value::Null,
         };
         self.connection.execute(
             "INSERT INTO catalog_items(id, item_json, updated_at) VALUES (?1, ?2, ?3)
@@ -459,6 +460,7 @@ mod tests {
             pinned: false,
             usage_count: 0,
             last_used_at: None,
+            metadata: serde_json::Value::Null,
         }
     }
 

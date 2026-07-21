@@ -7,12 +7,15 @@
 - Python Remote Script with automatic reconnect, selected context, incremental Browser traversal, path-based loading, all four placement modes, diagnostics, and workflow execution.
 - Safe installation, local macOS service lifecycle, unit tests, strict linting, and cross-language integration tests.
 - Real Ableton Live 12.4.5b7 verification of context, a 5,000-item catalog, fuzzy search, native insertion, Browser preset/rack loading, all placement modes, workflows, and personalization.
+- Read-only import of Ableton's live plug-in index, verified with 60 installed plug-ins across 28 vendors, including 15 instruments and 45 effects.
 
 ## Current gate
 
 Restart Live so the corrected Remote Script is loaded, then verify a 10,000–20,000-item catalog scan. The first large scan revealed that the bridge's short receive timeout could interrupt a multi-megabyte write; the write path now has an independent 30-second window.
 
 This gate is about catalog scale, not core product behavior. The smaller real catalog and every execution feature already pass.
+
+In parallel, match imported plug-in identifiers to the Plug-Ins Browser root so index-seeded search results become safely loadable without scanning unrelated User Library content.
 
 ## Next: GPUI command palette
 

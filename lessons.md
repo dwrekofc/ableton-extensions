@@ -57,3 +57,18 @@ This is a chronological engineering journal. Add an entry whenever the project r
 - A 10,000-item scan revealed a truncated JSON frame caused by the bridge's short socket timeout during `sendall`. The correction is installed but requires Live to restart before the in-process Python module changes.
 - The official extension package installed successfully, and Ableton's Extension Host showed no crash, but it remained inactive as a daemon peer. Because the Python bridge already provides the complete MVP and more context, the extension is now optional and non-blocking.
 - Public source must exclude both research references and Ableton's SDK distribution. Ableton's SDK license permits application development and distribution but expressly prohibits redistributing the SDK outside the application.
+
+## 2026-07-20 — Ableton database import
+
+- Live maintains a small SQLite plug-in catalog at `Live-plugins-1.db` and a much larger versioned file index such as `Live-files-12300.db`. On this machine the plug-in catalog contains the exact identifiers, names, vendors, versions, SDK versions, subcategories, enable/scan state, and module paths needed for fast VST/VST3 discovery.
+- A read-only import found 60 enabled and successfully scanned plug-ins from 28 vendors: 15 instruments and 45 audio effects. Search returned real VST and VST3 variants of Serum with the correct track compatibility and module metadata.
+- The file index contains more than 115,000 records and several internal relationship/keyword tables. It can accelerate later preset discovery, but its undocumented enums and hierarchy should not be coupled directly to the product model.
+- Database discovery and Browser execution are different concerns. An indexed plug-in is marked unresolved until a live Browser item is matched, because a module path or device identifier is not itself a callable Live object.
+
+## 2026-07-20 — Browser sample normalization feasibility
+
+- Ableton Extensions SDK `1.0.0` can add context actions to objects in the Live Set, including `AudioClip`, `Sample`, `Simpler`, and selection scopes for clip slots and Arrangement lanes. It has no context-menu scope or selection argument for Live Browser items, so it cannot receive one or more files selected in the Browser.
+- The SDK documentation limits direct filesystem access to an Extension's storage and temporary directories and warns against using child processes or other workarounds to access arbitrary paths. In-place Browser-file normalization is therefore outside both the current API surface and its documented permission model.
+- A supported approximation can normalize files referenced by Live Set clips or loaded Simpler samples only if destructive file processing is delegated to a separately installed helper with an explicit user trust and recovery model. That is a materially different workflow and must not be presented as Browser integration.
+- Peak normalization should remain preview-first and require an explicit confirmation because an atomic sibling-file replacement is not part of Live's undo history, can invalidate `.asd` analysis, and changes every Live Set that references the same source file.
+- A macOS sibling-temp `mv -f` test confirmed that replacement changes the inode, resets the original modification time and mode, and drops the destination's extended attributes. “Same everything except gain” therefore requires an explicit metadata-copy policy and still cannot preserve inode or hard-link identity while retaining atomic replacement.

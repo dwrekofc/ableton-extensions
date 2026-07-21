@@ -21,6 +21,7 @@ primary integration     future supported path
 
 - `palette-protocol` is the shared contract for context, catalog items, requests, results, errors, workflows, collections, and hotkeys.
 - `palette-core` stores the catalog and preferences in SQLite, ranks fuzzy results with `nucleo-matcher`, and validates workflows.
+- `palette-core` also reads Ableton's `Live-plugins-1.db` in read-only mode to seed enabled, successfully scanned VST/VST3 metadata without a broad Browser crawl.
 - `palette-daemon` owns runtime state, authenticates peers, routes requests, records scans and usage, and isolates the eventual GPUI process from Live restarts.
 - `palette-cli` exposes every backend capability without a UI so Live integration can be proven first.
 - `AbletonCommandPalette` is a Python MIDI Remote Script running on Live's main thread. It discovers selected context, scans and resolves Browser items, loads arbitrary supported Browser content, and executes workflows.
@@ -35,6 +36,7 @@ primary integration     future supported path
 - The Python network worker never touches Live. Requests are drained and executed through the Remote Script's scheduled main-thread callback.
 - SQLite holds indexed catalog and personalization data. Runtime configuration and workflow import files remain human-readable JSON.
 - Browser compatibility code is isolated because it is not covered by the public Extensions SDK.
+- Ableton's internal database schema is undocumented and version-sensitive. Imported plug-ins are marked `browser_resolved: false` until a Live Browser item is matched; the database path alone is never treated as permission to load a plug-in.
 
 ## Runtime data
 

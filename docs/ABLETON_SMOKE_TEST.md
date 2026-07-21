@@ -30,6 +30,15 @@ Expected: `bridge_connected` is `true`; context names the visibly selected track
 
 ## 3. Test catalog and loading
 
+First import and validate Ableton's existing plug-in index:
+
+```sh
+./scripts/import-live-index.sh
+./scripts/smoke-test-live-index.sh
+```
+
+Expected: the summary reports enabled instruments, effects, and vendors, then verifies that a real indexed plug-in can be found through palette search. This import is read-only and does not load anything into the Set.
+
 Select an unfrozen test track in Live, then run:
 
 ```sh

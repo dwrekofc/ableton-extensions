@@ -14,6 +14,7 @@ Requests and responses carry a unique `request_id`. Errors contain a stable code
 
 - Health and connection status.
 - Fuzzy catalog search and usage ranking.
+- Read-only import of Ableton's local plug-in database with an explicit import summary.
 - Favorites and pins.
 - Add/remove aliases and custom tags.
 - Create/list/delete collections and add/remove members.
@@ -34,5 +35,11 @@ Requests and responses carry a unique `request_id`. Errors contain a stable code
 - Selected-device-relative placement is rejected clearly because the beta public SDK does not expose the selected device.
 
 This peer is experimental and non-blocking. The primary Rust/Python path does not require an extension connection.
+
+## Ableton index import
+
+`import_live_database` accepts an optional plug-in database path. When omitted, the daemon discovers `Live-plugins-1.db` in Ableton's standard application-data directory. Only records with `enabled=1` and `scanstate=1` are copied. Imported items carry `source: live_database` and preserve device identifier, vendor, version, SDK version, subtype, format, and module path as metadata.
+
+Importing is discovery, not execution. Items remain intentionally unloadable until their identifiers are reconciled with a live Browser path.
 
 The canonical Rust definitions live in `crates/palette-protocol/src/lib.rs`. Python and TypeScript intentionally use small transport adapters rather than generated clients so their Live runtimes stay dependency-light.

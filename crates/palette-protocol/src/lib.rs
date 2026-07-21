@@ -72,6 +72,7 @@ pub enum ItemKind {
 #[serde(rename_all = "snake_case")]
 pub enum ItemSource {
     LiveBrowser,
+    LiveDatabase,
     OfficialExtension,
     User,
     BuiltIn,
@@ -121,6 +122,8 @@ pub struct CatalogItem {
     #[serde(default)]
     pub usage_count: u64,
     pub last_used_at: Option<i64>,
+    #[serde(default)]
+    pub metadata: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -206,6 +209,17 @@ pub struct HotkeyBinding {
     pub target_id: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveDatabaseImportSummary {
+    pub plugin_database: String,
+    pub schema_version: i64,
+    pub discovered: usize,
+    pub imported: usize,
+    pub instruments: usize,
+    pub audio_effects: usize,
+    pub vendors: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum RequestKind {
@@ -219,6 +233,9 @@ pub enum RequestKind {
     Search {
         query: String,
         limit: usize,
+    },
+    ImportLiveDatabase {
+        plugin_database: Option<String>,
     },
     LoadItem {
         item_id: String,
@@ -321,6 +338,7 @@ pub enum ResponseData {
     Context(LiveContext),
     Catalog(Vec<CatalogItem>),
     SearchResults(Vec<CatalogItem>),
+    LiveDatabaseImport(LiveDatabaseImportSummary),
     Workflow(WorkflowDefinition),
     Workflows(Vec<WorkflowDefinition>),
     Collections(Vec<CollectionSummary>),

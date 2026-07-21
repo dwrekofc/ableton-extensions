@@ -23,6 +23,8 @@ A producer can invoke the palette, describe or search for what they need, choose
 
 The product presents a unified catalog of loadable Ableton content and executable actions. Results can be discovered by name, alias, category, tag, collection, or common shorthand.
 
+Ableton's local plug-in index may seed VST/VST3 discovery without crawling unrelated Browser content. The imported index remains read-only and is reconciled with Live Browser items before execution.
+
 ### Context-aware execution
 
 Before executing an action, the product understands the selected track, selected device, and requested insertion position. Incompatible results are hidden or clearly explained rather than failing silently.
@@ -69,6 +71,8 @@ A TypeScript extension built with the official Ableton Extensions SDK is retaine
 ### Local persistence
 
 Catalog metadata, aliases, favorites, collections, hotkeys, workflows, compatibility data, and usage history are stored locally. Human-readable configuration is preferred where practical, with a structured local database available for indexed data.
+
+Ableton-owned databases are never modified or redistributed. A compatibility importer reads only the minimum required schema and copies normalized metadata into the product database.
 
 ## Success measures
 
