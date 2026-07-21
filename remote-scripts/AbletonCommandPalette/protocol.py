@@ -42,3 +42,11 @@ def failure(request_id, code, message, retryable=False):
             "retryable": bool(retryable),
         },
     }
+
+
+def event(name, data=None):
+    return {
+        "type": "event",
+        "event": str(name),
+        "data": data or {},
+    }

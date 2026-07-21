@@ -31,6 +31,9 @@ enum Command {
     Ping,
     Status,
     Context,
+    InspectDevices {
+        query: String,
+    },
     Scan {
         #[arg(long, default_value_t = 20_000)]
         max_items: usize,
@@ -41,6 +44,10 @@ enum Command {
         query: String,
         #[arg(long, default_value_t = 20)]
         limit: usize,
+    },
+    ImportLiveIndex {
+        #[arg(long)]
+        plugin_database: Option<PathBuf>,
     },
     Load {
         item_id: String,
@@ -167,6 +174,7 @@ fn command_to_request(command: Command) -> Result<RequestKind> {
         Command::Ping => RequestKind::Ping,
         Command::Status => RequestKind::Status,
         Command::Context => RequestKind::GetContext,
+        Command::InspectDevices { query } => RequestKind::InspectDevices { query },
         Command::Scan {
             max_items,
             max_depth,
@@ -175,6 +183,9 @@ fn command_to_request(command: Command) -> Result<RequestKind> {
             max_depth: max_depth.clamp(1, 64),
         },
         Command::Search { query, limit } => RequestKind::Search { query, limit },
+        Command::ImportLiveIndex { plugin_database } => RequestKind::ImportLiveDatabase {
+            plugin_database: plugin_database.map(|path| path.display().to_string()),
+        },
         Command::Load { item_id, position } => RequestKind::LoadItem {
             item_id,
             browser_path: Vec::new(),

@@ -28,7 +28,24 @@ Confirm the bridge from another terminal:
 
 Expected: `bridge_connected` is `true`; context names the visibly selected track and device; diagnostics include `browser_catalog` and `browser_load` without warnings.
 
+Exercise the read-only nested-device inventory with a device name present in the disposable Set:
+
+```sh
+./target/release/ableton-palette inspect-devices "EQ Eight"
+```
+
+Expected: every matching instance is reported with its track, rack-chain path, and device-index path. The request must not change track selection, device state, or the Set.
+
 ## 3. Test catalog and loading
+
+First import and validate Ableton's existing plug-in index:
+
+```sh
+./scripts/import-live-index.sh
+./scripts/smoke-test-live-index.sh
+```
+
+Expected: the summary reports enabled instruments, effects, and vendors, then verifies that a real indexed plug-in can be found through palette search. This import is read-only and does not load anything into the Set.
 
 Select an unfrozen test track in Live, then run:
 

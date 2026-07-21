@@ -5,6 +5,7 @@ members = [
   "crates/palette-core",
   "crates/palette-daemon",
   "crates/palette-cli",
+  "crates/palette-app",
 ]
 
 [workspace.package]

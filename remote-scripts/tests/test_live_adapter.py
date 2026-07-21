@@ -26,11 +26,19 @@ class FakeParameter:
 
 
 class FakeDevice:
-    def __init__(self, name):
+    def __init__(self, name, chains=None, active=True):
         self.name = name
         self.class_name = name.replace(" ", "")
         self.class_display_name = name
         self.parameters = [FakeParameter("Amount")]
+        self.chains = chains or []
+        self.is_active = active
+
+
+class FakeChain:
+    def __init__(self, name, devices=None):
+        self.name = name
+        self.devices = devices or []
 
 
 class FakeTrack:
@@ -82,6 +90,11 @@ class FakeBrowser:
     def __init__(self):
         self.reverb = FakeBrowserItem("Reverb", True, is_device=True)
         self.audio_effects = FakeBrowserItem("Audio Effects", children=[self.reverb])
+        self.trackspacer = FakeBrowserItem("Trackspacer 2.5", True, is_device=True)
+        self.plugins = FakeBrowserItem(
+            "Plug-Ins",
+            children=[FakeBrowserItem("Wavesfactory", children=[self.trackspacer])],
+        )
         self.loaded = []
 
     def load_item(self, item):
@@ -102,6 +115,26 @@ class LiveAdapterTests(unittest.TestCase):
         self.assertEqual(context["selected_device_index"], 0)
         self.assertEqual(context["live_version"], "12.4.5b7")
 
+    def test_device_inventory_recurses_through_rack_chains(self):
+        meter = FakeDevice("CTZ Swiss Army Meter", active=False)
+        rack = FakeDevice("Meter Rack", [FakeChain("Meters", [meter])])
+        self.track.devices.append(rack)
+
+        inventory = self.adapter.device_inventory("swiss army")
+
+        self.assertEqual(inventory["query"], "swiss army")
+        self.assertEqual(len(inventory["instances"]), 1)
+        instance = inventory["instances"][0]
+        self.assertEqual(instance["track_name"], "Audio 1")
+        self.assertEqual(instance["track_kind"], "audio")
+        self.assertEqual(instance["device_indices"], [2, 0])
+        self.assertEqual(instance["chain_names"], ["Meters"])
+        self.assertEqual(
+            instance["device_path"],
+            ["Meter Rack", "Meters", "CTZ Swiss Army Meter"],
+        )
+        self.assertFalse(instance["active"])
+
     def test_native_insertion_positions(self):
         self.adapter.insert_native("Reverb", "beginning")
         self.adapter.insert_native("Auto Filter", "before_selected")
@@ -119,8 +152,12 @@ class LiveAdapterTests(unittest.TestCase):
         )
         self.assertIsNone(response)
         responses = self.adapter.advance_scans(100)
-        self.assertEqual(len(responses), 1)
-        item = responses[0]["result"]["data"][0]
+        self.assertEqual(len(responses), 2)
+        self.assertEqual(responses[0]["type"], "event")
+        self.assertEqual(responses[0]["event"], "catalog_batch")
+        item = responses[0]["data"]["items"][0]
+        self.assertEqual(responses[1]["result"]["kind"], "catalog_scan")
+        self.assertEqual(responses[1]["result"]["data"]["scanned"], 2)
         self.assertEqual(item["name"], "Reverb")
         load = self.adapter.handle_request(
             "load-1",
@@ -154,6 +191,23 @@ class LiveAdapterTests(unittest.TestCase):
         self.assertEqual(self.track.name, "Vocal")
         self.assertEqual(len(results), 2)
         self.assertFalse(results[-1]["success"])
+
+    def test_indexed_plugin_resolves_through_live_browser(self):
+        response = self.adapter.handle_request(
+            "resolve-1",
+            {
+                "method": "resolve_and_load_item",
+                "params": {
+                    "item_id": "live-db:trackspacer",
+                    "name": "Trackspacer 2.5",
+                    "kind": "plugin",
+                    "position": "beginning",
+                },
+            },
+        )
+        self.assertIsNone(response["error"])
+        self.assertEqual(self.browser.loaded, [self.browser.trackspacer])
+        self.assertEqual(self.track.view.device_insert_mode, 1)
 
 
 if __name__ == "__main__":

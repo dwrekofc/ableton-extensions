@@ -63,6 +63,7 @@ pub enum ItemKind {
     Rack,
     MaxDevice,
     Sample,
+    Loop,
     Command,
     Workflow,
     Unknown,
@@ -72,6 +73,7 @@ pub enum ItemKind {
 #[serde(rename_all = "snake_case")]
 pub enum ItemSource {
     LiveBrowser,
+    LiveDatabase,
     OfficialExtension,
     User,
     BuiltIn,
@@ -98,6 +100,31 @@ pub struct LiveContext {
     pub devices: Vec<DeviceSummary>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceInstance {
+    pub track_name: String,
+    pub track_kind: TrackKind,
+    pub track_index: Option<usize>,
+    pub device_name: String,
+    pub class_name: Option<String>,
+    pub class_display_name: Option<String>,
+    pub active: Option<bool>,
+    #[serde(default)]
+    pub device_indices: Vec<usize>,
+    #[serde(default)]
+    pub chain_names: Vec<String>,
+    #[serde(default)]
+    pub device_path: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceInventory {
+    pub live_version: Option<String>,
+    pub set_name: Option<String>,
+    pub query: String,
+    pub instances: Vec<DeviceInstance>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CatalogItem {
     pub id: String,
@@ -121,6 +148,8 @@ pub struct CatalogItem {
     #[serde(default)]
     pub usage_count: u64,
     pub last_used_at: Option<i64>,
+    #[serde(default)]
+    pub metadata: Value,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -206,12 +235,31 @@ pub struct HotkeyBinding {
     pub target_id: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveDatabaseImportSummary {
+    pub plugin_database: String,
+    pub schema_version: i64,
+    pub discovered: usize,
+    pub imported: usize,
+    pub instruments: usize,
+    pub audio_effects: usize,
+    pub vendors: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogScanSummary {
+    pub scanned: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum RequestKind {
     Ping,
     Status,
     GetContext,
+    InspectDevices {
+        query: String,
+    },
     ScanCatalog {
         max_items: usize,
         max_depth: usize,
@@ -220,10 +268,19 @@ pub enum RequestKind {
         query: String,
         limit: usize,
     },
+    ImportLiveDatabase {
+        plugin_database: Option<String>,
+    },
     LoadItem {
         item_id: String,
         #[serde(default)]
         browser_path: Vec<String>,
+        position: InsertionPosition,
+    },
+    ResolveAndLoadItem {
+        item_id: String,
+        name: String,
+        kind: ItemKind,
         position: InsertionPosition,
     },
     InsertNative {
@@ -301,8 +358,10 @@ impl RequestKind {
     pub fn target(&self) -> PeerTarget {
         match self {
             Self::GetContext
+            | Self::InspectDevices { .. }
             | Self::ScanCatalog { .. }
             | Self::LoadItem { .. }
+            | Self::ResolveAndLoadItem { .. }
             | Self::InsertNative { .. }
             | Self::ExecuteWorkflow { .. }
             | Self::Diagnostics => PeerTarget::Bridge,
@@ -319,8 +378,11 @@ pub enum ResponseData {
     Pong,
     Status(ServiceStatus),
     Context(LiveContext),
+    DeviceInventory(DeviceInventory),
     Catalog(Vec<CatalogItem>),
+    CatalogScan(CatalogScanSummary),
     SearchResults(Vec<CatalogItem>),
+    LiveDatabaseImport(LiveDatabaseImportSummary),
     Workflow(WorkflowDefinition),
     Workflows(Vec<WorkflowDefinition>),
     Collections(Vec<CollectionSummary>),

@@ -50,6 +50,7 @@ This is a chronological engineering journal. Add an entry whenever the project r
 
 ## 2026-07-20 — Real Ableton smoke test
 
+- An all-track device inventory must recurse through each device's rack chains; selected-track context and top-level `Track.devices` alone cannot find Max for Live devices nested inside Audio Effect Racks. Device names and classes are visible through the Live Object Model, but the source `.amxd` filename/version is not guaranteed to be exposed at runtime.
 - The authenticated Python bridge connected to Live Beta 12.4.5b7 and reported selected track, selected device, device order, Live version, and all twelve expected Browser roots with no warnings.
 - Incremental scanning and persistence passed with 5,000 real Browser items. Fuzzy search resolved a user EQ Eight preset, and path-based loading successfully inserted that preset at beginning, before selected, after selected, and end.
 - Native insertion passed all four placement modes with Live-confirmed device order. Browser loading also succeeded for an `.adg` Audio Effect Rack, proving the route is not limited to stock device names.
@@ -57,3 +58,34 @@ This is a chronological engineering journal. Add an entry whenever the project r
 - A 10,000-item scan revealed a truncated JSON frame caused by the bridge's short socket timeout during `sendall`. The correction is installed but requires Live to restart before the in-process Python module changes.
 - The official extension package installed successfully, and Ableton's Extension Host showed no crash, but it remained inactive as a daemon peer. Because the Python bridge already provides the complete MVP and more context, the extension is now optional and non-blocking.
 - Public source must exclude both research references and Ableton's SDK distribution. Ableton's SDK license permits application development and distribution but expressly prohibits redistributing the SDK outside the application.
+
+## 2026-07-20 — Ableton database import
+
+- Live maintains a small SQLite plug-in catalog at `Live-plugins-1.db` and a much larger versioned file index such as `Live-files-12300.db`. On this machine the plug-in catalog contains the exact identifiers, names, vendors, versions, SDK versions, subcategories, enable/scan state, and module paths needed for fast VST/VST3 discovery.
+- A read-only import found 60 enabled and successfully scanned plug-ins from 28 vendors: 15 instruments and 45 audio effects. Search returned real VST and VST3 variants of Serum with the correct track compatibility and module metadata.
+- The file index contains more than 115,000 records and several internal relationship/keyword tables. It can accelerate later preset discovery, but its undocumented enums and hierarchy should not be coupled directly to the product model.
+- Database discovery and Browser execution are different concerns. An indexed plug-in is marked unresolved until a live Browser item is matched, because a module path or device identifier is not itself a callable Live object.
+
+## 2026-07-20 — Browser sample normalization feasibility
+
+- Ableton Extensions SDK `1.0.0` can add context actions to objects in the Live Set, including `AudioClip`, `Sample`, `Simpler`, and selection scopes for clip slots and Arrangement lanes. It has no context-menu scope or selection argument for Live Browser items, so it cannot receive one or more files selected in the Browser.
+- The SDK documentation limits direct filesystem access to an Extension's storage and temporary directories and warns against using child processes or other workarounds to access arbitrary paths. In-place Browser-file normalization is therefore outside both the current API surface and its documented permission model.
+- A supported approximation can normalize files referenced by Live Set clips or loaded Simpler samples only if destructive file processing is delegated to a separately installed helper with an explicit user trust and recovery model. That is a materially different workflow and must not be presented as Browser integration.
+- Peak normalization should remain preview-first and require an explicit confirmation because an atomic sibling-file replacement is not part of Live's undo history, can invalidate `.asd` analysis, and changes every Live Set that references the same source file.
+- A macOS sibling-temp `mv -f` test confirmed that replacement changes the inode, resets the original modification time and mode, and drops the destination's extended attributes. “Same everything except gain” therefore requires an explicit metadata-copy policy and still cannot preserve inode or hard-link identity while retaining atomic replacement.
+
+## 2026-07-20 — Native GPUI command bar
+
+- The current `dwrekofc/zed` GPUI fork is already proven by the user's other native Rust applications and supports runtime Metal shaders, avoiding a full-Xcode shader build dependency. It is a better compatibility base than Loungy's older pinned GPUI API while preserving Loungy's useful window and hotkey patterns.
+- `NSWorkspace.frontmostApplication` provides the foreground bundle identity without Accessibility permission. Both installed Live and Live Beta report `com.ableton.live`, so one focus gate covers both; the visible palette remains allowed to consume Command-J again so the shortcut can toggle it closed.
+- A hidden GPUI popup can remain resident as a lightweight agent app. `global-hotkey` delivers Command-J independently of Live, while the app decides whether the foreground identity is eligible before activating its window.
+- Complete Browser scans cannot safely accumulate into one JSON response: a six-figure catalog can exceed the 32 MiB frame ceiling even when transport timeouts are generous. Streaming bounded catalog batches to the daemon for incremental SQLite upserts removes that message-size ceiling while preserving one final scan summary for the caller.
+- Internal plug-in-index discovery and Browser resolution remain separate. An indexed name is discovery metadata, not a load handle; unresolved plug-ins must be reconciled to a live Browser item before execution.
+
+## 2026-07-20 — Command bar interaction smoke test
+
+- `Track.insert_device(name, index)` is not a dependable third-party plug-in loader: Trackspacer 2.5 was present in Live's Plug-Ins Browser but rejected by direct insertion. Database-only plug-ins now resolve exact names inside the Plug-Ins tree and load via `Browser.load_item`.
+- A fixed server result limit is also a UI limit. The first palette requested twelve matches and therefore could neither render nor scroll beyond twelve. The app now requests the daemon's 200-item maximum and owns a tracked vertical scroll region whose child index accounts for category headers.
+- A hidden agent application and a hidden popup window are different lifecycle states. Destroying the GPUI popup on Escape/focus loss, while keeping only the hotkey agent resident, gives a stronger guarantee than application hiding and prevents stale overlays across applications.
+- Category headers must not enter the selection model. Results are grouped only for display/order; keyboard selection remains indexed exclusively over catalog items, with a result-to-rendered-child mapping for scrolling.
+- Search visibility is a UI preference, not catalog deletion. Persisting independent group toggles in `ui-settings.json` lets users change the command surface without rescanning or mutating their Ableton-derived catalog.

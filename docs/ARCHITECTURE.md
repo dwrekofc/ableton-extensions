@@ -2,10 +2,10 @@
 
 ## Outcome-oriented view
 
-The system separates fast search and personal preferences from Ableton-specific behavior. This keeps the future command bar responsive and allows Live compatibility fixes without rewriting the product.
+The system separates the native command experience, fast search and personal preferences from Ableton-specific behavior. This keeps the command bar responsive and allows Live compatibility fixes without rewriting the product.
 
 ```text
-Future GPUI command bar / current CLI
+Native GPUI command bar / test CLI
                  |
        authenticated local protocol
                  |
@@ -21,20 +21,26 @@ primary integration     future supported path
 
 - `palette-protocol` is the shared contract for context, catalog items, requests, results, errors, workflows, collections, and hotkeys.
 - `palette-core` stores the catalog and preferences in SQLite, ranks fuzzy results with `nucleo-matcher`, and validates workflows.
-- `palette-daemon` owns runtime state, authenticates peers, routes requests, records scans and usage, and isolates the eventual GPUI process from Live restarts.
+- `palette-core` also reads Ableton's `Live-plugins-1.db` in read-only mode to seed enabled, successfully scanned VST/VST3 metadata without a broad Browser crawl.
+- `palette-daemon` owns runtime state, authenticates peers, routes requests, records scans and usage, and isolates the GPUI process from Live restarts.
 - `palette-cli` exposes every backend capability without a UI so Live integration can be proven first.
+- `palette-app` is the native GPUI macOS agent. It registers Command-J, validates the foreground application, renders grouped/scrollable results and Live context, persists content visibility settings, exposes per-item actions, and sends execution requests without owning Ableton compatibility logic.
 - `AbletonCommandPalette` is a Python MIDI Remote Script running on Live's main thread. It discovers selected context, scans and resolves Browser items, loads arbitrary supported Browser content, and executes workflows.
 - The optional TypeScript extension uses Ableton's beta Extensions SDK for supported native insertion. It is sidelined because the SDK does not expose the selection or Browser capabilities required by the palette and the primary bridge already covers the complete MVP.
 
 ## Key decisions
 
-- Rust is the product core and future UI language; GPUI remains isolated to the deferred frontend crate.
+- Rust is the product core and UI language; GPUI remains isolated to `palette-app`.
 - Loopback TCP plus newline-delimited JSON lets Rust, Python, and TypeScript communicate without platform-specific FFI.
 - Every peer must present the locally generated token and exact protocol version.
 - Live objects never cross the protocol. Browser paths and stable hashes are used because Live object references are session-bound.
 - The Python network worker never touches Live. Requests are drained and executed through the Remote Script's scheduled main-thread callback.
+- Full scans stream bounded catalog-batch events to the daemon for incremental SQLite upserts, then finish with one compact summary. No catalog size depends on fitting every item into a single protocol frame.
+- Database-only plug-in results are resolved inside the live Plug-Ins Browser by the Remote Script before loading; `Track.insert_device` remains reserved for native-device insertion.
+- Palette windows are disposable. Escape and focus loss destroy the current popup; the resident shortcut agent creates another only after an Ableton-gated invocation.
 - SQLite holds indexed catalog and personalization data. Runtime configuration and workflow import files remain human-readable JSON.
 - Browser compatibility code is isolated because it is not covered by the public Extensions SDK.
+- Ableton's internal database schema is undocumented and version-sensitive. Imported plug-ins are marked `browser_resolved: false` until a Live Browser item is matched; the database path alone is never treated as permission to load a plug-in.
 
 ## Runtime data
 
@@ -43,6 +49,8 @@ On macOS, runtime state defaults to `~/Library/Application Support/Ableton Comma
 - `config.json` — loopback address, protocol version, and owner-readable authentication token.
 - `palette.sqlite3` — catalog, favorites, pins, usage, aliases, tags, collections, workflows, and hotkey assignments.
 - `logs/daemon.log` — daemon output when launched with the provided script.
+- `app/Ableton Command Palette.app` — installed local GPUI agent bundle.
+- `ui-settings.json` — persistent content-group visibility preferences.
 
 Set `ABLETON_PALETTE_DATA_DIR` to use an isolated location.
 
