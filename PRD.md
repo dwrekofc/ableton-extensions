@@ -23,6 +23,8 @@ A producer can invoke the palette, describe or search for what they need, choose
 
 The product presents a unified catalog of loadable Ableton content and executable actions. Results can be discovered by name, alias, category, tag, collection, or common shorthand.
 
+Results are grouped by recognizable content type so producers can scan them quickly. Users can hide categories they do not want in search, and those choices persist between sessions.
+
 Ableton's local plug-in index may seed VST/VST3 discovery without crawling unrelated Browser content. The imported index remains read-only and is reconciled with Live Browser items before execution.
 
 ### Context-aware execution
@@ -32,6 +34,8 @@ Before executing an action, the product understands the selected track, selected
 ### Fast personalization
 
 Users can favorite or pin results, create custom collections, add aliases and tags, and assign direct shortcuts. Frequently and recently used items rise naturally in search results.
+
+An item-action surface keeps personalization keyboard-first, beginning with adding or removing the selected result from Favorites.
 
 ### Commands and workflows
 
@@ -49,12 +53,13 @@ Ableton integration that depends on version-sensitive behavior is isolated from 
 - Reversible: actions should respect Live's undo behavior wherever the available APIs permit it.
 - Local first: no cloud account or hosted service is required.
 - Fail safely: unavailable content, incompatible tracks, and stale catalog entries produce actionable feedback.
+- Stay out of the way: the palette disappears completely on Escape or when Ableton loses focus and never follows the user into another application.
 
 ## High-level architecture and technology decisions
 
-### Native application and future command bar
+### Native application and command bar
 
-The desktop application is written in Rust. Its eventual command-bar interface will use GPUI for a small, fast, GPU-rendered native overlay. UI work is intentionally deferred until the integration, protocol, catalog, storage, and execution layers are testable in Ableton Live.
+The desktop application is written in Rust and uses GPUI for a small, fast, GPU-rendered native overlay. It remains resident without a Dock icon, registers Command-J globally, and activates only when Ableton Live or Ableton Live Beta is the foreground application.
 
 ### Shared Rust core
 
@@ -83,11 +88,13 @@ Ableton-owned databases are never modified or redistributed. A compatibility imp
 - Commands and workflows return clear success or failure results.
 - The integration can recover cleanly after Live restarts or the desktop process disconnects.
 - Automated tests cover protocol compatibility, placement decisions, workflow validation, persistence, and error handling.
-- A CLI test harness can exercise the complete backend before the GPUI interface is built.
+- A CLI test harness can exercise the complete backend independently of the GPUI interface.
+- Command-J opens only from Live, search and navigation remain keyboard-first, and the visible target and placement agree with Live before execution.
+- Large result sets remain scrollable, category filters persist, and every result is presented under a clear content-group heading.
 
 ## Scope for the current build
 
-Build everything required to test the product in Ableton Live except the GPUI command-bar frontend:
+Build everything required to use and test the product in Ableton Live:
 
 - Rust workspace, shared models, protocol, persistence, catalog, ranking, workflows, daemon, and CLI harness.
 - Python Remote Script bridge and installation tooling.
@@ -95,10 +102,10 @@ Build everything required to test the product in Ableton Live except the GPUI co
 - Local authentication and lifecycle handling.
 - Automated tests and an Ableton smoke-test guide.
 - Compatibility diagnostics and structured logging.
+- Native GPUI command bar, Ableton-only global shortcut, unified search, context, placement, execution, and full Browser refresh.
 
 ## Deferred scope
 
-- GPUI command-bar windows and visual components.
 - Public distribution, code signing, notarization, automatic updates, and commercial licensing work.
 - Cloud synchronization or accounts.
 - Real-time audio or MIDI processing.
@@ -110,6 +117,7 @@ Build everything required to test the product in Ableton Live except the GPUI co
 3. Build the Ableton Remote Script bridge with context, catalog, loading, placement, and diagnostics.
 4. Build the Rust daemon, persistent catalog, personalization, ranking, workflow engine, and CLI test harness.
 5. Validate the Python bridge in Live, including context, placement, Browser content, workflows, and personalization.
-6. Correct and recheck large-catalog transport after restarting Live.
-7. Build the GPUI command-bar frontend on top of the verified Rust and Python backend.
-8. Revisit the optional official extension when its SDK coverage materially improves the product.
+6. Stream large catalogs in bounded batches and recheck a complete refresh after restarting Live.
+7. Build and validate the GPUI command-bar frontend on top of the verified Rust and Python backend.
+8. Add deeper in-palette personalization and dedicated item/workflow hotkeys.
+9. Revisit the optional official extension when its SDK coverage materially improves the product.

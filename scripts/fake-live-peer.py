@@ -49,26 +49,37 @@ def bridge_result(request):
                 ],
             },
         }
+    if method == "inspect_devices":
+        return {
+            "kind": "device_inventory",
+            "data": {
+                "live_version": "fake-12.4",
+                "set_name": "Protocol Test",
+                "query": params["query"],
+                "instances": [
+                    {
+                        "track_name": "Audio 1",
+                        "track_kind": "audio",
+                        "track_index": 0,
+                        "device_name": "CTZ Swiss Army Meter",
+                        "class_name": "MxDeviceAudioEffect",
+                        "class_display_name": "Max Audio Effect",
+                        "active": True,
+                        "device_indices": [1, 0],
+                        "chain_names": ["Meters"],
+                        "device_path": [
+                            "Meter Rack",
+                            "Meters",
+                            "CTZ Swiss Army Meter",
+                        ],
+                    }
+                ],
+            },
+        }
     if method == "scan_catalog":
         return {
-            "kind": "catalog",
-            "data": [
-                {
-                    "id": "browser:fake-reverb",
-                    "kind": "native_device",
-                    "source": "live_browser",
-                    "name": "Reverb",
-                    "aliases": [],
-                    "categories": ["Audio Effects"],
-                    "tags": ["space"],
-                    "browser_path": ["Audio Effects", "Reverb"],
-                    "compatible_tracks": ["audio", "midi", "return"],
-                    "favorite": False,
-                    "pinned": False,
-                    "usage_count": 0,
-                    "last_used_at": None,
-                }
-            ],
+            "kind": "catalog_scan",
+            "data": {"scanned": 1},
         }
     if method == "execute_workflow":
         actions = params["workflow"]["actions"]
@@ -96,9 +107,36 @@ def bridge_result(request):
                 "details": {},
             },
         }
-    if method in ("load_item", "insert_native"):
+    if method in ("load_item", "resolve_and_load_item", "insert_native"):
         return {"kind": "ack"}
     raise ValueError("unsupported fake bridge method: %s" % method)
+
+
+def catalog_batch(request_id):
+    return {
+        "type": "event",
+        "event": "catalog_batch",
+        "data": {
+            "request_id": request_id,
+            "items": [
+                {
+                    "id": "browser:fake-reverb",
+                    "kind": "native_device",
+                    "source": "live_browser",
+                    "name": "Reverb",
+                    "aliases": [],
+                    "categories": ["Audio Effects"],
+                    "tags": ["space"],
+                    "browser_path": ["Audio Effects", "Reverb"],
+                    "compatible_tracks": ["audio", "midi", "return"],
+                    "favorite": False,
+                    "pinned": False,
+                    "usage_count": 0,
+                    "last_used_at": None,
+                }
+            ],
+        },
+    }
 
 
 def main():
@@ -130,6 +168,9 @@ def main():
             continue
         try:
             if args.role == "bridge":
+                if message["request"]["method"] == "scan_catalog":
+                    stream.write((json.dumps(catalog_batch(message["request_id"])) + "\n").encode("utf-8"))
+                    stream.flush()
                 result = bridge_result(message)
             elif message["request"]["method"] == "sdk_insert_native":
                 result = {"kind": "ack"}

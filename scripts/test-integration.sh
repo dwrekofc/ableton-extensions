@@ -46,7 +46,8 @@ while :; do
 done
 
 target/debug/ableton-palette --data-dir "$test_dir" context | grep -q '"track_name": "Audio 1"'
-target/debug/ableton-palette --data-dir "$test_dir" scan --max-items 100 --max-depth 4 | grep -q '"name": "Reverb"'
+target/debug/ableton-palette --data-dir "$test_dir" inspect-devices "Swiss Army" | grep -q '"device_name": "CTZ Swiss Army Meter"'
+target/debug/ableton-palette --data-dir "$test_dir" scan --max-items 100 --max-depth 4 | grep -q '"scanned": 1'
 target/debug/ableton-palette --data-dir "$test_dir" search verb | grep -q '"id": "browser:fake-reverb"'
 target/debug/ableton-palette --data-dir "$test_dir" alias browser:fake-reverb spaceverb | grep -q '"kind": "ack"'
 target/debug/ableton-palette --data-dir "$test_dir" tag browser:fake-reverb spacious | grep -q '"kind": "ack"'

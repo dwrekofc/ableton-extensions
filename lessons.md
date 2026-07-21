@@ -50,6 +50,7 @@ This is a chronological engineering journal. Add an entry whenever the project r
 
 ## 2026-07-20 — Real Ableton smoke test
 
+- An all-track device inventory must recurse through each device's rack chains; selected-track context and top-level `Track.devices` alone cannot find Max for Live devices nested inside Audio Effect Racks. Device names and classes are visible through the Live Object Model, but the source `.amxd` filename/version is not guaranteed to be exposed at runtime.
 - The authenticated Python bridge connected to Live Beta 12.4.5b7 and reported selected track, selected device, device order, Live version, and all twelve expected Browser roots with no warnings.
 - Incremental scanning and persistence passed with 5,000 real Browser items. Fuzzy search resolved a user EQ Eight preset, and path-based loading successfully inserted that preset at beginning, before selected, after selected, and end.
 - Native insertion passed all four placement modes with Live-confirmed device order. Browser loading also succeeded for an `.adg` Audio Effect Rack, proving the route is not limited to stock device names.
@@ -72,3 +73,19 @@ This is a chronological engineering journal. Add an entry whenever the project r
 - A supported approximation can normalize files referenced by Live Set clips or loaded Simpler samples only if destructive file processing is delegated to a separately installed helper with an explicit user trust and recovery model. That is a materially different workflow and must not be presented as Browser integration.
 - Peak normalization should remain preview-first and require an explicit confirmation because an atomic sibling-file replacement is not part of Live's undo history, can invalidate `.asd` analysis, and changes every Live Set that references the same source file.
 - A macOS sibling-temp `mv -f` test confirmed that replacement changes the inode, resets the original modification time and mode, and drops the destination's extended attributes. “Same everything except gain” therefore requires an explicit metadata-copy policy and still cannot preserve inode or hard-link identity while retaining atomic replacement.
+
+## 2026-07-20 — Native GPUI command bar
+
+- The current `dwrekofc/zed` GPUI fork is already proven by the user's other native Rust applications and supports runtime Metal shaders, avoiding a full-Xcode shader build dependency. It is a better compatibility base than Loungy's older pinned GPUI API while preserving Loungy's useful window and hotkey patterns.
+- `NSWorkspace.frontmostApplication` provides the foreground bundle identity without Accessibility permission. Both installed Live and Live Beta report `com.ableton.live`, so one focus gate covers both; the visible palette remains allowed to consume Command-J again so the shortcut can toggle it closed.
+- A hidden GPUI popup can remain resident as a lightweight agent app. `global-hotkey` delivers Command-J independently of Live, while the app decides whether the foreground identity is eligible before activating its window.
+- Complete Browser scans cannot safely accumulate into one JSON response: a six-figure catalog can exceed the 32 MiB frame ceiling even when transport timeouts are generous. Streaming bounded catalog batches to the daemon for incremental SQLite upserts removes that message-size ceiling while preserving one final scan summary for the caller.
+- Internal plug-in-index discovery and Browser resolution remain separate. An indexed name is discovery metadata, not a load handle; unresolved plug-ins must be reconciled to a live Browser item before execution.
+
+## 2026-07-20 — Command bar interaction smoke test
+
+- `Track.insert_device(name, index)` is not a dependable third-party plug-in loader: Trackspacer 2.5 was present in Live's Plug-Ins Browser but rejected by direct insertion. Database-only plug-ins now resolve exact names inside the Plug-Ins tree and load via `Browser.load_item`.
+- A fixed server result limit is also a UI limit. The first palette requested twelve matches and therefore could neither render nor scroll beyond twelve. The app now requests the daemon's 200-item maximum and owns a tracked vertical scroll region whose child index accounts for category headers.
+- A hidden agent application and a hidden popup window are different lifecycle states. Destroying the GPUI popup on Escape/focus loss, while keeping only the hotkey agent resident, gives a stronger guarantee than application hiding and prevents stale overlays across applications.
+- Category headers must not enter the selection model. Results are grouped only for display/order; keyboard selection remains indexed exclusively over catalog items, with a result-to-rendered-child mapping for scrolling.
+- Search visibility is a UI preference, not catalog deletion. Persisting independent group toggles in `ui-settings.json` lets users change the command surface without rescanning or mutating their Ableton-derived catalog.

@@ -1,6 +1,6 @@
 import hashlib
 
-from .protocol import failure, success
+from .protocol import event, failure, success
 
 
 BROWSER_ROOTS = (
@@ -20,11 +20,14 @@ BROWSER_ROOTS = (
 
 
 class CatalogScan:
+    BATCH_SIZE = 500
+
     def __init__(self, adapter, max_items, max_depth):
         self.adapter = adapter
         self.max_items = max(1, min(int(max_items), 250000))
         self.max_depth = max(1, min(int(max_depth), 64))
-        self.items = []
+        self.batch = []
+        self.scanned = 0
         self.stack = []
         self.finished = False
         for label, attribute in reversed(BROWSER_ROOTS):
@@ -34,12 +37,13 @@ class CatalogScan:
 
     def step(self, budget=128):
         processed = 0
-        while self.stack and processed < budget and len(self.items) < self.max_items:
+        while self.stack and processed < budget and self.scanned < self.max_items:
             item, path, depth, root_label = self.stack.pop()
             processed += 1
             if self.adapter.is_loadable(item):
                 record = self.adapter.catalog_record(item, path, root_label)
-                self.items.append(record)
+                self.batch.append(record)
+                self.scanned += 1
                 self.adapter.item_cache[record["id"]] = item
             if depth < self.max_depth and self.adapter.is_folder(item):
                 children = self.adapter.children(item)
@@ -47,9 +51,16 @@ class CatalogScan:
                     self.stack.append(
                         (child, path + [self.adapter.item_name(child)], depth + 1, root_label)
                     )
-        if not self.stack or len(self.items) >= self.max_items:
+        if not self.stack or self.scanned >= self.max_items:
             self.finished = True
         return self.finished
+
+    def take_batch(self):
+        if not self.batch:
+            return []
+        batch = self.batch
+        self.batch = []
+        return batch
 
 
 class LiveAdapter:
@@ -66,6 +77,12 @@ class LiveAdapter:
         try:
             if method == "get_context":
                 return success(request_id, "context", self.context())
+            if method == "inspect_devices":
+                return success(
+                    request_id,
+                    "device_inventory",
+                    self.device_inventory(params.get("query", "")),
+                )
             if method == "scan_catalog":
                 if self.browser is None:
                     return failure(request_id, "browser_unavailable", "Live Browser API is unavailable")
@@ -77,6 +94,8 @@ class LiveAdapter:
                 return None
             if method == "load_item":
                 return self._load_response(request_id, params)
+            if method == "resolve_and_load_item":
+                return self._resolve_and_load_response(request_id, params)
             if method == "insert_native":
                 self.insert_native(params["name"], params.get("position", "after_selected"))
                 return success(request_id)
@@ -89,11 +108,23 @@ class LiveAdapter:
         except Exception as exc:
             return failure(request_id, "live_error", str(exc))
 
-    def advance_scans(self, budget=128):
+    def advance_scans(self, budget=256):
         responses = []
         for request_id, scan in list(self.scans.items()):
-            if scan.step(budget):
-                responses.append(success(request_id, "catalog", scan.items))
+            finished = scan.step(budget)
+            if len(scan.batch) >= scan.BATCH_SIZE or finished:
+                batch = scan.take_batch()
+                if batch:
+                    responses.append(
+                        event(
+                            "catalog_batch",
+                            {"request_id": request_id, "items": batch},
+                        )
+                    )
+            if finished:
+                responses.append(
+                    success(request_id, "catalog_scan", {"scanned": scan.scanned})
+                )
                 del self.scans[request_id]
         return responses
 
@@ -144,12 +175,107 @@ class LiveAdapter:
             "live_version": self.context().get("live_version"),
             "capabilities": [
                 "live_context",
+                "device_inventory",
                 "native_insert",
                 "workflows",
             ] + (["browser_catalog", "browser_load"] if self.browser is not None else []),
             "warnings": warnings,
             "details": {"browser_roots": roots, "cached_items": len(self.item_cache)},
         }
+
+    def device_inventory(self, query):
+        query = str(query).strip()
+        if not query:
+            raise ValueError("device inventory query must not be empty")
+        folded_query = query.casefold()
+        instances = []
+        for track, kind, index in self.all_tracks():
+            self.collect_device_instances(
+                track,
+                kind,
+                index,
+                list(getattr(track, "devices", ())),
+                folded_query,
+                instances,
+            )
+        version = None
+        getter = getattr(self.application, "get_version_string", None)
+        if callable(getter):
+            version = str(getter())
+        return {
+            "live_version": version,
+            "set_name": self.optional_string(getattr(self.song, "name", None)),
+            "query": query,
+            "instances": instances,
+        }
+
+    def all_tracks(self):
+        tracks = list(getattr(self.song, "tracks", ()))
+        for index, track in enumerate(tracks):
+            yield track, self.track_kind(track), index
+        for index, track in enumerate(list(getattr(self.song, "return_tracks", ()))):
+            yield track, "return", index
+        master = getattr(self.song, "master_track", None)
+        if master is not None:
+            yield master, "main", None
+
+    def collect_device_instances(
+        self,
+        track,
+        track_kind,
+        track_index,
+        devices,
+        folded_query,
+        instances,
+        device_indices=None,
+        chain_names=None,
+        device_path=None,
+    ):
+        device_indices = list(device_indices or [])
+        chain_names = list(chain_names or [])
+        device_path = list(device_path or [])
+        for device_index, device in enumerate(devices):
+            name = str(getattr(device, "name", "Device"))
+            class_name = self.optional_string(getattr(device, "class_name", None))
+            class_display_name = self.optional_string(
+                getattr(device, "class_display_name", None)
+            )
+            current_indices = device_indices + [device_index]
+            current_path = device_path + [name]
+            searchable = [name, class_name, class_display_name]
+            if any(
+                folded_query in value.casefold()
+                for value in searchable
+                if value is not None
+            ):
+                active_value = getattr(device, "is_active", None)
+                instances.append(
+                    {
+                        "track_name": str(getattr(track, "name", "Track")),
+                        "track_kind": track_kind,
+                        "track_index": track_index,
+                        "device_name": name,
+                        "class_name": class_name,
+                        "class_display_name": class_display_name,
+                        "active": bool(active_value) if active_value is not None else None,
+                        "device_indices": current_indices,
+                        "chain_names": list(chain_names),
+                        "device_path": current_path,
+                    }
+                )
+            for chain_index, chain in enumerate(list(getattr(device, "chains", ()))):
+                chain_name = str(getattr(chain, "name", "Chain %d" % (chain_index + 1)))
+                self.collect_device_instances(
+                    track,
+                    track_kind,
+                    track_index,
+                    list(getattr(chain, "devices", ())),
+                    folded_query,
+                    instances,
+                    current_indices,
+                    chain_names + [chain_name],
+                    current_path + [chain_name],
+                )
 
     def selected_track(self):
         track = getattr(getattr(self.song, "view", None), "selected_track", None)
@@ -236,6 +362,49 @@ class LiveAdapter:
             return failure(request_id, "browser_unavailable", "Live Browser load_item is unavailable")
         loader(item)
         return success(request_id)
+
+    def _resolve_and_load_response(self, request_id, params):
+        if self.browser is None:
+            return failure(request_id, "browser_unavailable", "Live Browser API is unavailable")
+        item = self.find_loadable_by_name(params["name"], params.get("kind"))
+        if item is None:
+            return failure(
+                request_id,
+                "item_not_found",
+                "Plug-in is indexed but could not be resolved in Live's Browser: %s"
+                % params["name"],
+            )
+        self.item_cache[params["item_id"]] = item
+        self.configure_browser_insertion(params.get("position", "after_selected"))
+        loader = getattr(self.browser, "load_item", None)
+        if not callable(loader):
+            return failure(request_id, "browser_unavailable", "Live Browser load_item is unavailable")
+        loader(item)
+        return success(request_id)
+
+    def find_loadable_by_name(self, name, kind=None):
+        target = str(name).casefold()
+        preferred_roots = []
+        if kind == "plugin":
+            preferred_roots.append(("Plug-Ins", "plugins"))
+        preferred_roots.extend(
+            root for root in BROWSER_ROOTS if root not in preferred_roots
+        )
+        for _label, attribute in preferred_roots:
+            root = getattr(self.browser, attribute, None)
+            if root is None:
+                continue
+            stack = [root]
+            while stack:
+                candidate = stack.pop()
+                if (
+                    self.is_loadable(candidate)
+                    and self.item_name(candidate).casefold() == target
+                ):
+                    return candidate
+                if self.is_folder(candidate):
+                    stack.extend(reversed(self.children(candidate)))
+        return None
 
     def execute_workflow(self, workflow):
         results = []
@@ -349,6 +518,8 @@ class LiveAdapter:
             return "preset"
         if root_label == "Samples":
             return "sample"
+        if root_label == "Clips":
+            return "loop"
         if bool(getattr(item, "is_device", False)):
             return "native_device"
         if root_label in ("Instruments", "Audio Effects", "MIDI Effects") and len(path) <= 2:

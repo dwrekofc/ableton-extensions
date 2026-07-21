@@ -10,6 +10,8 @@ Each connection begins with `hello`, including the protocol version, token, role
 
 Requests and responses carry a unique `request_id`. Errors contain a stable code, user-readable message, and retryable flag. Integration requests time out after 120 seconds.
 
+Complete Browser scans use `catalog_batch` events associated with the pending scan request. The daemon validates that association and upserts each bounded batch immediately. The bridge ends the request with `catalog_scan { scanned }`, keeping every frame below the limit while preserving one completion result for CLI and GPUI clients. The older single-response `catalog` result remains accepted for compatibility.
+
 ## Daemon capabilities
 
 - Health and connection status.
@@ -24,8 +26,10 @@ Requests and responses carry a unique `request_id`. Errors contain a stable code
 ## Python bridge capabilities
 
 - Selected track and selected device context.
+- Read-only, case-insensitive device inventory across normal, return, and main tracks, including devices nested in rack chains.
 - Incremental Browser catalog scans.
 - Browser item loading at beginning, before selection, after selection, or end.
+- Exact-name Browser resolution and loading for plug-ins first discovered through Ableton's internal index.
 - Native insertion through Live's compatibility API.
 - Multi-action workflows and diagnostics.
 
@@ -40,6 +44,6 @@ This peer is experimental and non-blocking. The primary Rust/Python path does no
 
 `import_live_database` accepts an optional plug-in database path. When omitted, the daemon discovers `Live-plugins-1.db` in Ableton's standard application-data directory. Only records with `enabled=1` and `scanstate=1` are copied. Imported items carry `source: live_database` and preserve device identifier, vendor, version, SDK version, subtype, format, and module path as metadata.
 
-Importing is discovery, not execution. Items remain intentionally unloadable until their identifiers are reconciled with a live Browser path.
+Importing and Browser discovery remain separate. When an imported item has no path, the daemon requests exact-name resolution in Live's Plug-Ins Browser at execution time; successful resolution is cached for that Live session.
 
 The canonical Rust definitions live in `crates/palette-protocol/src/lib.rs`. Python and TypeScript intentionally use small transport adapters rather than generated clients so their Live runtimes stay dependency-light.

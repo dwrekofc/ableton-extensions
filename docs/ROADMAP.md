@@ -9,24 +9,32 @@
 - Real Ableton Live 12.4.5b7 verification of context, a 5,000-item catalog, fuzzy search, native insertion, Browser preset/rack loading, all placement modes, workflows, and personalization.
 - Read-only import of Ableton's live plug-in index, verified with 60 installed plug-ins across 28 vendors, including 15 instruments and 45 effects.
 
+## Native command bar completed
+
+- GPUI macOS overlay with no Electron or browser runtime.
+- Global Command-J invocation gated to foreground Ableton Live and Ableton Live Beta.
+- Unified catalog search across devices, plug-ins, presets, racks, Max for Live devices, samples, commands, and workflows.
+- Keyboard navigation, selected track/device context, four insertion positions, click support, execution feedback, and automatic dismissal.
+- Full Browser refresh streamed in bounded batches so the catalog is not constrained by one large protocol message.
+- Local `.app` packaging plus install, start, and stop scripts.
+- Grouped 200-result scrolling, persistent content visibility filters, Command-K item actions, and disposable close/focus-loss window lifecycle.
+- On-demand Browser resolution for plug-ins seeded from Ableton's internal index.
+
 ## Current gate
 
-Restart Live so the corrected Remote Script is loaded, then verify a 10,000–20,000-item catalog scan. The first large scan revealed that the bridge's short receive timeout could interrupt a multi-megabyte write; the write path now has an independent 30-second window.
+Install the updated Remote Script, restart Live, then visually verify Command-J invocation, search, placement, execution, dismissal, non-Ableton focus blocking, and the complete batched Browser refresh.
 
 This gate is about catalog scale, not core product behavior. The smaller real catalog and every execution feature already pass.
 
 In parallel, match imported plug-in identifiers to the Plug-Ins Browser root so index-seeded search results become safely loadable without scanning unrelated User Library content.
 
-## Next: GPUI command palette
+## Next: product depth
 
-1. Add the GPUI application shell and make it own daemon lifecycle.
-2. Register the global palette shortcut and render a fast floating overlay.
-3. Connect search results to the proven Rust catalog and ranking APIs.
-4. Show selected track/device context and placement choice before execution.
-5. Add keyboard-only result navigation, favorites, pins, collections, aliases, tags, and workflow actions.
-6. Add direct assigned-hotkey registration using the stored bindings.
-7. Add settings, diagnostics, re-scan controls, and clear compatibility feedback.
-8. Measure launch, invocation, query, and execution latency in normal production sets.
+1. Extend the existing in-palette Favorite action with pin, collection, alias, tag, and workflow editing actions.
+2. Register dedicated item and workflow hotkeys from stored bindings.
+3. Add settings and diagnostics views without weakening the fast overlay interaction.
+4. Reconcile internal plug-in-index entries with live Browser paths for guaranteed loading.
+5. Measure launch, invocation, query, refresh, and execution latency in production sets.
 
 ## Later: optional official extension
 

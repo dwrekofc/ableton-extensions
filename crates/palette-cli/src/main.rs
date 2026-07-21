@@ -31,6 +31,9 @@ enum Command {
     Ping,
     Status,
     Context,
+    InspectDevices {
+        query: String,
+    },
     Scan {
         #[arg(long, default_value_t = 20_000)]
         max_items: usize,
@@ -171,6 +174,7 @@ fn command_to_request(command: Command) -> Result<RequestKind> {
         Command::Ping => RequestKind::Ping,
         Command::Status => RequestKind::Status,
         Command::Context => RequestKind::GetContext,
+        Command::InspectDevices { query } => RequestKind::InspectDevices { query },
         Command::Scan {
             max_items,
             max_depth,

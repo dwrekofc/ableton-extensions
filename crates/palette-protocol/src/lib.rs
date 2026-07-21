@@ -63,6 +63,7 @@ pub enum ItemKind {
     Rack,
     MaxDevice,
     Sample,
+    Loop,
     Command,
     Workflow,
     Unknown,
@@ -97,6 +98,31 @@ pub struct LiveContext {
     pub selected_device_name: Option<String>,
     pub frozen: bool,
     pub devices: Vec<DeviceSummary>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceInstance {
+    pub track_name: String,
+    pub track_kind: TrackKind,
+    pub track_index: Option<usize>,
+    pub device_name: String,
+    pub class_name: Option<String>,
+    pub class_display_name: Option<String>,
+    pub active: Option<bool>,
+    #[serde(default)]
+    pub device_indices: Vec<usize>,
+    #[serde(default)]
+    pub chain_names: Vec<String>,
+    #[serde(default)]
+    pub device_path: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceInventory {
+    pub live_version: Option<String>,
+    pub set_name: Option<String>,
+    pub query: String,
+    pub instances: Vec<DeviceInstance>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -220,12 +246,20 @@ pub struct LiveDatabaseImportSummary {
     pub vendors: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogScanSummary {
+    pub scanned: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", rename_all = "snake_case")]
 pub enum RequestKind {
     Ping,
     Status,
     GetContext,
+    InspectDevices {
+        query: String,
+    },
     ScanCatalog {
         max_items: usize,
         max_depth: usize,
@@ -241,6 +275,12 @@ pub enum RequestKind {
         item_id: String,
         #[serde(default)]
         browser_path: Vec<String>,
+        position: InsertionPosition,
+    },
+    ResolveAndLoadItem {
+        item_id: String,
+        name: String,
+        kind: ItemKind,
         position: InsertionPosition,
     },
     InsertNative {
@@ -318,8 +358,10 @@ impl RequestKind {
     pub fn target(&self) -> PeerTarget {
         match self {
             Self::GetContext
+            | Self::InspectDevices { .. }
             | Self::ScanCatalog { .. }
             | Self::LoadItem { .. }
+            | Self::ResolveAndLoadItem { .. }
             | Self::InsertNative { .. }
             | Self::ExecuteWorkflow { .. }
             | Self::Diagnostics => PeerTarget::Bridge,
@@ -336,7 +378,9 @@ pub enum ResponseData {
     Pong,
     Status(ServiceStatus),
     Context(LiveContext),
+    DeviceInventory(DeviceInventory),
     Catalog(Vec<CatalogItem>),
+    CatalogScan(CatalogScanSummary),
     SearchResults(Vec<CatalogItem>),
     LiveDatabaseImport(LiveDatabaseImportSummary),
     Workflow(WorkflowDefinition),

@@ -4,9 +4,10 @@ use palette_core::{
     AppPaths, RuntimeConfig, Store, default_live_plugin_database, import_live_plugin_database,
 };
 use palette_protocol::{
-    MAX_FRAME_BYTES, PROTOCOL_VERSION, PeerRole, PeerTarget, ProtocolError, RequestKind,
-    ResponseData, ServiceStatus, WireMessage,
+    CatalogItem, MAX_FRAME_BYTES, PROTOCOL_VERSION, PeerRole, PeerTarget, ProtocolError,
+    RequestKind, ResponseData, ServiceStatus, WireMessage,
 };
+use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader},
@@ -48,6 +49,12 @@ struct State {
     store: Mutex<Store>,
     peers: RwLock<HashMap<PeerRole, PeerHandle>>,
     pending: Mutex<HashMap<String, PendingRequest>>,
+}
+
+#[derive(Deserialize)]
+struct CatalogBatch {
+    request_id: String,
+    items: Vec<CatalogItem>,
 }
 
 #[tokio::main]
@@ -187,7 +194,14 @@ async fn handle_connection(stream: TcpStream, state: Arc<State>) -> Result<()> {
                 route_peer_response(request_id, result, error, state.clone()).await;
             }
             WireMessage::Event { event, data } if role != PeerRole::Client => {
-                info!(?role, %event, data = %data, "integration event");
+                if event == "catalog_batch" {
+                    match serde_json::from_value::<CatalogBatch>(data) {
+                        Ok(batch) => persist_catalog_batch(batch, state.clone()).await,
+                        Err(error) => warn!(%error, "invalid catalog batch event"),
+                    }
+                } else {
+                    info!(?role, %event, data = %data, "integration event");
+                }
             }
             _ => warn!(?role, "ignored unexpected protocol message"),
         }
@@ -205,16 +219,33 @@ async fn handle_connection(stream: TcpStream, state: Arc<State>) -> Result<()> {
     Ok(())
 }
 
+async fn persist_catalog_batch(batch: CatalogBatch, state: Arc<State>) {
+    let is_pending_scan = state
+        .pending
+        .lock()
+        .await
+        .get(&batch.request_id)
+        .is_some_and(|pending| matches!(&pending.original, RequestKind::ScanCatalog { .. }));
+    if !is_pending_scan {
+        warn!(request_id = %batch.request_id, "ignored catalog batch without a pending scan");
+        return;
+    }
+    if let Err(error) = state.store.lock().await.upsert_catalog(&batch.items) {
+        error!(%error, request_id = %batch.request_id, "failed to persist catalog batch");
+    }
+}
+
 async fn route_client_request(
     request_id: String,
     mut request: RequestKind,
     client: mpsc::Sender<WireMessage>,
     state: Arc<State>,
 ) {
+    let mut resolve_from_index = None;
     if let RequestKind::LoadItem {
         item_id,
         browser_path,
-        ..
+        position,
     } = &mut request
     {
         if browser_path.is_empty() {
@@ -223,18 +254,15 @@ async fn route_client_request(
                     if item.source == palette_protocol::ItemSource::LiveDatabase
                         && item.browser_path.is_empty()
                     {
-                        let _ = client
-                            .send(WireMessage::failure(
-                                request_id,
-                                ProtocolError::new(
-                                    "browser_path_unresolved",
-                                    "plug-in was discovered in Ableton's index but still needs Browser-path resolution before loading",
-                                ),
-                            ))
-                            .await;
-                        return;
+                        resolve_from_index = Some(RequestKind::ResolveAndLoadItem {
+                            item_id: item.id,
+                            name: item.name,
+                            kind: item.kind,
+                            position: position.clone(),
+                        });
+                    } else {
+                        *browser_path = item.browser_path;
                     }
-                    *browser_path = item.browser_path;
                 }
                 Ok(None) => {
                     let _ = client
@@ -259,6 +287,9 @@ async fn route_client_request(
                 }
             }
         }
+    }
+    if let Some(resolved_request) = resolve_from_index {
+        request = resolved_request;
     }
     match request.target() {
         PeerTarget::Daemon => {
@@ -357,7 +388,9 @@ async fn route_peer_response(
                 error!(%error, "failed to persist scanned catalog");
             }
         }
-        if let RequestKind::LoadItem { item_id, .. } = &pending.original {
+        if let RequestKind::LoadItem { item_id, .. }
+        | RequestKind::ResolveAndLoadItem { item_id, .. } = &pending.original
+        {
             if let Err(error) = state.store.lock().await.record_usage(item_id) {
                 warn!(%error, %item_id, "failed to record usage");
             }
